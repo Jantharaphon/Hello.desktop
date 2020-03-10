@@ -1,0 +1,81 @@
+#include <Arduino.h>
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
+#include <ir_Panasonic.h>
+#include <BlynkSimpleEsp8266.h>
+
+
+const char *ssid =     "WIFI_NAME";         // ใส่ชื่อ WiFi ของเราตรงนี้
+const char *password = "WIFI_PASSWORD";     // ใส่ Password WiFi ของเราตรงนี้
+char auth[] = "xxxxxxxxxxxxxxxxxxxxxx";     // ใส่ Token ที่ได้จาก blynk ตรงนี้
+
+
+
+/**
+ * IRRemote
+ */
+    const uint16_t kIrLed = 4;  // ESP8266 GPIO pin to use. Recommended: 4 (D2).
+    IRPanasonicAc ac(kIrLed);   // สร้าง Object ที่ใช้คุมแอร์แบบ Panasonic (หากเป็นยี่ห้ออื่นให้ดูตัวอย่างใน Library IRRemoteESP8266)
+    
+    
+    int temp_ac = 25; //อุณหภูมิตั้งต้น
+    typedef enum{
+      REQ_NONE =0,  //ไม่มีคำสั่ง
+      REQ_ON_AC,    //คำสั่งเปิดแอร์
+      REQ_OFF_AC,   //คำสั่งปิดแอร์
+      REQ_TEMP_AC   //คำสั่งปรับอุณหภูมิ
+    }req_en;
+    
+    req_en req;
+    int retry = 0;
+    unsigned long last_retry=0;
+
+
+
+/**
+ * ตั้งค่า BLYNK
+ */
+    #define BLYNK_PRINT Serial
+
+    //เมื่อมีการกดปุ่มเปิดแอร์ (virtual pin 1) ฟังก์ชันนี้จะทำงาน
+    BLYNK_WRITE(V1)
+    {
+      if(param.asInt()) {
+        Serial.println("Req on recv");
+        req = REQ_ON_AC;
+      }
+    }
+
+    //เมื่อมีการกดปุ่มปิดแอร์ (virtual pin 2) ฟังก์ชันนี้จะทำงาน
+    BLYNK_WRITE(V2)
+    {
+      if(param.asInt()) {
+        Serial.println("Req off recv");
+        req = REQ_OFF_AC;
+      }
+    }
+
+    //เมื่อมีการปรับอุณหภูมิ (virtual pin 0) ฟังก์ชันนี้จะทำงาน
+    BLYNK_WRITE(V0)
+    {
+      temp_ac = param.asInt();
+      Serial.println("Req temp = " + String(temp_ac));
+      req = REQ_TEMP_AC;
+    }
+    BlynkTimer timer;  //เรียกใช้การตั้งเวลาของ Blynk
+    
+
+/**
+ * แสดงสถานะของข้อมูลที่เราจะส่งออกไปยังแอร์
+ */
+    
+    void printState() {
+      // Display the settings.
+      Serial.println("Panasonic A/C remote is in the following state:");
+      Serial.printf("  %s\n", ac.toString().c_str());
+      // Display the encoded IR sequence.
+      unsigned char* ir_code = ac.getRaw();
+      Serial.print("IR Code: 0x");
+      for (uint8_t i = 0; i < kPanasonicAcStateLength; i++)
+        Serial.printf("%02X", ir_code[i]);
+      Serial.println();
